@@ -1,4 +1,3 @@
-
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
@@ -48,8 +47,29 @@ def draw_grid_and_get_blockades(L):
     redraw_blockades(ax, L)
     click_handler.points = []
     fig.canvas.mpl_connect("button_press_event", lambda event: click_handler(event, ax, L, fig))
+
+    # Dodajemy nowy przyciski w rogu okna
+    from matplotlib.widgets import Button
+
+    button_ax_reset = fig.add_axes([0.8, 0.01, 0.15, 0.05])  # Reset
+    button_reset = Button(button_ax_reset, 'Resetuj blokady', color='lightgray', hovercolor='gray')
+
+    button_ax_finish = fig.add_axes([0.8, 0.07, 0.15, 0.05])  # Zakończ
+    button_finish = Button(button_ax_finish, 'Start', color='lightgray', hovercolor='gray')
+
+    def on_finish(event):
+        plt.close(fig)  # Zamyka okno
+
+    def on_reset(event):
+        global manual_blockades_set
+        manual_blockades_set.clear()  # Resetuje blokady
+        redraw_blockades(ax, L)
+        fig.canvas.draw()
+
+    button_finish.on_clicked(on_finish)
+    button_reset.on_clicked(on_reset)
+
     plt.tight_layout()
-    # Pokaż animację przejazdu
     plt.show()
 
 # Główna funkcja symulująca ruch pojazdu po siatce
@@ -60,7 +80,6 @@ def run_simulation(L, p_block, start, end, randomize_points, manual_blockades_en
         while start == end:
             end = (np.random.randint(0, L), np.random.randint(0, L))
 
-        # BFS – szukanie najkrótszej ścieżki, z uwzględnieniem blokad
     def bfs(start, end, blocked_edges):
         queue = deque()
         visited = set()
@@ -133,16 +152,15 @@ def run_simulation(L, p_block, start, end, randomize_points, manual_blockades_en
         ax.axvline(i, color='gray', linewidth=0.5)
     for edge in blocked_edges:
         a, b = list(edge)
-        ax.plot([a[0], b[0]], [a[1], b[1]], color='red', linewidth=2, label='Blokada' if 'Blokada' not in ax.get_legend_handles_labels()[1] else "")
+        ax.plot([a[0], b[0]], [a[1], b[1]], color='red', linewidth=2)
     for i in range(len(actual_path) - 1):
         a = actual_path[i]
         b = actual_path[i + 1]
-        ax.plot([a[0], b[0]], [a[1], b[1]], color='blue', linewidth=1.5, label='Trasa pojazdu' if i == 0 else "")
-    ax.plot(start[0], start[1], 'go', markersize=10, label='Start')
-    ax.plot(end[0], end[1], 'mo', markersize=10, label='Koniec')
-    vehicle, = ax.plot([], [], 'ro', markersize=8, label='Pojazd')
+        ax.plot([a[0], b[0]], [a[1], b[1]], color='blue', linewidth=1.5)
+    ax.plot(start[0], start[1], 'go', markersize=10)
+    ax.plot(end[0], end[1], 'mo', markersize=10)
+    vehicle, = ax.plot([], [], 'ro', markersize=8)
     time_text = ax.text(0.02, 1.02, '', transform=ax.transAxes)
-    ax.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
 
     def init():
         vehicle.set_data([], [])
@@ -157,39 +175,38 @@ def run_simulation(L, p_block, start, end, randomize_points, manual_blockades_en
         return vehicle, time_text
 
     ani = FuncAnimation(fig, update, frames=len(actual_path), init_func=init, interval=1000, blit=True)
-    # Ustawiam tytuł wykresu z informacją o starcie, mecie i p_blokady
-    plt.title(f"Symulacja: {start} → {end}, p_blokady={p_block}")
     plt.tight_layout()
-    # Pokaż animację przejazdu
-    plt.show()
-    draw_event_report(event_log)
+    from matplotlib.widgets import Button
 
-# Rysuje przebytą trasę i blokady, jeśli nie dało się dotrzeć do celu
-def visualize_failed_path(start, end, blocked_edges, L, last_position, path_traveled):
-    fig, ax = plt.subplots(figsize=(10,6))
-    ax.set_xlim(-0.5, L + 0.5)
-    ax.set_ylim(-0.5, L + 0.5)
-    ax.set_aspect('equal')
-    for i in range(L+1):
-        ax.axhline(i, color='gray', linewidth=0.5)
-        ax.axvline(i, color='gray', linewidth=0.5)
-    for edge in blocked_edges:
-        a, b = list(edge)
-        ax.plot([a[0], b[0]], [a[1], b[1]], color='red', linewidth=2, label='Blokada' if 'Blokada' not in ax.get_legend_handles_labels()[1] else "")
-    ax.plot(start[0], start[1], 'go', markersize=10, label='Start')
-    ax.plot(end[0], end[1], 'mo', markersize=10, label='Koniec')
-    for i in range(len(path_traveled) - 1):
-        a = path_traveled[i]
-        b = path_traveled[i + 1]
-        ax.plot([a[0], b[0]], [a[1], b[1]], color='blue', linestyle='--', linewidth=1.5, label='Przebyta trasa' if i == 0 else '')
-    ax.plot(last_position[0], last_position[1], 'yo', markersize=10, label='Ostatni węzeł')
-    ax.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
-    ax.set_title("Brak trasy – blokady uniemożliwiły przejazd")
-    plt.tight_layout()
-    # Pokaż animację przejazdu
+    button_ax_report = fig.add_axes([0.8, 0.07, 0.15, 0.05])
+    button_report = Button(button_ax_report, 'Pokaż raport', color='lightgray', hovercolor='gray')
+
+    def show_report(event):
+        times = [log[0] for log in event_log]
+        positions = [log[1] for log in event_log]
+        blocked = [log[2] for log in event_log]
+
+        fig_report, ax_report = plt.subplots(figsize=(8, 4))
+        ax_report.plot(times, [pos[0] for pos in positions], label='X', marker='o')
+        ax_report.plot(times, [pos[1] for pos in positions], label='Y', marker='s')
+        ax_report.set_xlabel("Czas")
+        ax_report.set_ylabel("Pozycja")
+        ax_report.set_title("Pozycja pojazdu w czasie")
+        ax_report.grid(True)
+        ax_report.legend()
+
+        for t, was_blocked in zip(times, blocked):
+            if was_blocked:
+                ax_report.axvline(t, color='red', linestyle='--', alpha=0.5)
+
+        plt.tight_layout()
+        plt.show()
+
+    button_report.on_clicked(show_report)
+
     plt.show()
 
-# GUI – użytkownik ustawia parametry i uruchamia symulację
+# Zmieniona funkcja GUI
 def start_gui():
     def start_sim():
         try:
@@ -260,21 +277,3 @@ def start_gui():
 
 if __name__ == "__main__":
     start_gui()
-    import matplotlib.pyplot as plt
-    times = []
-    nodes = []
-    colors = []
-    for t, node, blocked in event_log:
-        times.append(t)
-        nodes.append(f"{node}")
-        colors.append('red' if blocked else 'blue')
-
-    fig, ax = plt.subplots(figsize=(10,4))
-    ax.scatter(times, nodes, c=colors)
-    ax.set_xlabel("Czas (jednostki)")
-    ax.set_ylabel("Węzły (x,y)")
-    ax.set_title("Raport przejazdu: Czas vs. Skrzyżowania / Blokady")
-    ax.grid(True)
-    plt.tight_layout()
-    # Pokaż animację przejazdu
-    plt.show()
